@@ -1,16 +1,18 @@
 #include <iostream>
 #include <vector>
+#include <algorithm>
 #include <queue>
-#include <assert.h>
+#include <cassert>
 using namespace std;
+
+const int UNDEFINED = -1;
 
 class Tree{
 private:
-	vector <vector <int>> v;
-	vector <int> used;
-	int VertexNumber;
-	vector<int> DfsList;
-
+	vector <vector <int>> adjacencyMatrix_;
+	vector <int> heigh;
+	int verticesNumber;
+	
 	class Iterator{
 	private:
 		Tree* Tree_;
@@ -18,8 +20,8 @@ private:
 	public:	
 		Iterator(Tree& t, int curr): Tree_(&t), currentVertex(curr) {}
 		
-		Iterator operator ++(){
-			currentVertex = Tree_->NextVertexDFS(currentVertex);
+		Iterator& operator ++(){
+			currentVertex = Tree_->nextVertexDFS(currentVertex);
 			return *this;
 		}
 		int operator *(){
@@ -35,59 +37,50 @@ private:
 	};
 
 public:
+	typedef Iterator iterator;
 	Tree() {}
-	Tree(int n){
-		VertexNumber = n;
-		v.resize(n);
-		used.resize(n);
-		for (int i = 0; i < n; i++){
-			v[i].resize(n);
-			used[i] = false;
-			for (int j = 0; j < n; j++){
-				v[i][j] = -1;
-			}
-		}
-	}
+	explicit Tree(int n) : verticesNumber(n), adjacencyMatrix_(n, vector<int>(n, -1)){ }
 	
 	Iterator begin(){
 		return Iterator(*this, 0);
 	}
 
 	Iterator end(){
-		return Iterator(*this, -1);
+		return Iterator(*this, UNDEFINED);
 	}
 
-	void AddEdge(int v1, int v2){
-		v[v1][v2] = 1;
+	void addEdge(int v1, int v2){
+		adjacencyMatrix_[v1][v2] = 1;
 	}
 
-	int NextVertexDFS(int v){
-		for (int i = 0; i < VertexNumber; i++){
-			if (DfsList[i] == v){
-				if(i == VertexNumber - 1)
-					return -1;
-				else
-					return DfsList[++i];
+	int nextVertexDFS(int currentVertex){
+		int tempVertex = -1;
+		if (currentVertex < 0)
+			return UNDEFINED;
+		else{
+			while (true){
+				for (int i = 0; i < verticesNumber; i++){
+					if (adjacencyMatrix_[currentVertex][i] == 1 && tempVertex < i)
+						return i;
+				}
+
+				if (currentVertex == 0)
+					return UNDEFINED;
+				for (int i = 0; i < verticesNumber; i++){
+					if (adjacencyMatrix_[i][currentVertex] == 1){
+						tempVertex = currentVertex;
+						currentVertex = i;
+						break;
+					}
+				}
 			}
 		}
-		return -1;
 	}
-
-	void DFS(int t){
-		for (int i = 0; i < VertexNumber; i++){
-			used[i] = false;
-		}
-		DfsList.push_back(t);
-		used[t] = true;
-		for (int i = 0; i < VertexNumber; i++){
-			if (v[t][i] != -1 && used[i] == false)
-				DFS(i);
-		}
-	}
+	
 
 	vector<int> BFS(int t){
-		vector<int> BfsList;
-		for (int i = 0; i < VertexNumber; i++){
+		vector<int> BfsList, used(verticesNumber, false);
+		for (int i = 0; i < verticesNumber; i++){
 			used[i] = false;
 		}
 		queue <int> q;
@@ -99,8 +92,8 @@ public:
 			int t = q.front();
 			BfsList.push_back(t);
 			q.pop();
-			for (int i = 0; i < VertexNumber; i++){
-				if (v[t][i] != -1 && used[i] == false){
+			for (int i = 0; i < verticesNumber; i++){
+				if (adjacencyMatrix_[t][i] != -1 && used[i] == false){
 					q.push(i);
 					used[i] = true;
 				}
@@ -109,14 +102,13 @@ public:
 		return BfsList;
 	}
 
-	bool operator ==(Tree& t){
-		if (VertexNumber != t.VertexNumber)
+	bool operator ==(const Tree& t) const{
+		if (verticesNumber != t.verticesNumber)
 			return false;
 		else{
-			for (int i = 0; i < VertexNumber; i++){
-				for (int j = 0; j < VertexNumber; j++){
-					if (v[i][j] != t.v[i][j]){
-						cout << i << " "<< j;
+			for (int i = 0; i < verticesNumber; i++){
+				for (int j = 0; j < verticesNumber; j++){
+					if (adjacencyMatrix_[i][j] != t.adjacencyMatrix_[i][j]){
 						return false;
 					}
 				}
@@ -128,9 +120,9 @@ public:
 
 
 template <class DfsIterator>
-void buildTree(Tree& ResultTree, DfsIterator& dfsBegin, DfsIterator& dfsEnd, vector<int>& BfsList){
+void buildTree(Tree* resultTree, DfsIterator& dfsBegin, DfsIterator& dfsEnd, const vector<int>& BfsList){
 	if (BfsList.size() == 2){
-		ResultTree.AddEdge(BfsList[0], BfsList[1]);
+		resultTree->addEdge(BfsList[0], BfsList[1]);
 	}
 	else if (BfsList.size() > 2){
 		size_t index = 2;
@@ -140,7 +132,7 @@ void buildTree(Tree& ResultTree, DfsIterator& dfsBegin, DfsIterator& dfsEnd, vec
 		DfsIterator itEnd = dfsBegin;
 
 		while (dfsBegin != dfsEnd){
-			ResultTree.AddEdge(*itBegin, *it);
+			resultTree->addEdge(*itBegin, *it);
 			if (index < BfsList.size()){
 				while ((BfsList[index] != *dfsBegin) && (dfsBegin != dfsEnd)){
 					elementsForSubBfsList.push_back(*dfsBegin);
@@ -151,7 +143,7 @@ void buildTree(Tree& ResultTree, DfsIterator& dfsBegin, DfsIterator& dfsEnd, vec
 				subBfsList = createSubBfsList(elementsForSubBfsList, BfsList);
 				elementsForSubBfsList.clear();
 
-				buildTree(ResultTree, it, itEnd, subBfsList);
+				buildTree(resultTree, it, itEnd, subBfsList);
 
 				index++;
 				it = itEnd;
@@ -161,7 +153,7 @@ void buildTree(Tree& ResultTree, DfsIterator& dfsBegin, DfsIterator& dfsEnd, vec
 	}
 }
 
-vector <int> createSubBfsList(vector <int>& elementsForSubBfsList, vector <int>& BfsList){
+vector <int> createSubBfsList(vector <int>& elementsForSubBfsList, const vector <int>& BfsList){
 	vector <int> subBfsList;
 	vector <int>::iterator it;
 	for (size_t i = 0; i < BfsList.size(); i++){
@@ -173,22 +165,60 @@ vector <int> createSubBfsList(vector <int>& elementsForSubBfsList, vector <int>&
 	return subBfsList;
 }
 
-int main(){
-	Tree NewTree(9);
-	NewTree.AddEdge(0, 2);
-	NewTree.AddEdge(3, 8);
-	NewTree.AddEdge(2, 6);
-	NewTree.AddEdge(3, 7);
-	NewTree.AddEdge(0, 3);
-	NewTree.AddEdge(2, 1);
-	NewTree.AddEdge(2, 5);
-	NewTree.AddEdge(1, 4);
-	NewTree.DFS(0);
-	vector <int> BfsList = NewTree.BFS(0);
+template <class DfsIterator>
+void buildTreeChecking(Tree* resultTree, DfsIterator& dfsBegin, DfsIterator& dfsEnd, const vector<int>& BfsList){
+	vector<int> resultBfsList = resultTree->BFS(0);
+	assert(resultBfsList == BfsList);
+	Tree::iterator resultTreeIterator = resultTree->begin();
+	while(dfsBegin != dfsEnd){
+		assert(*resultTreeIterator == *dfsBegin);
+		++dfsBegin;
+		++resultTreeIterator;
+	}
+}
 
-	Tree ResultTree(BfsList.size());
-	buildTree(ResultTree, NewTree.begin(), NewTree.end(), BfsList);
-	assert(NewTree == ResultTree);
+void BuildTreeExample(){
+	Tree tree(9);
+	tree.addEdge(0, 2);
+	tree.addEdge(3, 8);
+	tree.addEdge(2, 6);
+	tree.addEdge(3, 7);
+	tree.addEdge(0, 3);
+	tree.addEdge(2, 1);
+	tree.addEdge(2, 5);
+	tree.addEdge(1, 4);
+	vector <int> BfsList = tree.BFS(0);
+
+	Tree resultTree(BfsList.size());
+	buildTree(&resultTree, tree.begin(), tree.end(), BfsList);
+	buildTreeChecking(&resultTree, tree.begin(), tree.end(), BfsList);
+}
+
+
+void BuildTreeCurrentTest(int i){
+	srand(i);
+	int treeSize = rand()%10 + 1;
+	Tree tree(treeSize);
+	for (int i = 1; i < treeSize; i++){
+		if (i == 1)
+			tree.addEdge(0, 1);
+		else
+			tree.addEdge(rand()%i, i);
+	}
+	vector <int> BfsList = tree.BFS(0);
+
+	Tree resultTree(BfsList.size());
+	buildTree(&resultTree, tree.begin(), tree.end(), BfsList);
+	buildTreeChecking(&resultTree, tree.begin(), tree.end(), BfsList);
+}
+
+void BuildTreeTest(){
+	for (int i = 0; i < 100; i++)
+		BuildTreeCurrentTest(i);
+}
+int main(){
+	BuildTreeExample();
+	BuildTreeTest();
 
 	return 0;
 }
